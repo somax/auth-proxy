@@ -4,8 +4,11 @@
   "description": "reverse proxy with basic auth",
   "main": "index.js",
   "dependencies": {
+    "@somax/speakeasy": "^2.0.0-1",
     "basic-auth": "^2.0.0",
     "http-proxy": "^1.16.2",
+    "jsonfile": "^4.0.0",
+    "qrcode": "^1.2.0",
     "solog": "^0.2.0",
     "tcp-proxy": "^0.0.1"
   },
