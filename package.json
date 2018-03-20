@@ -1,0 +1,26 @@
+{
+  "name": "auth-proxy",
+  "version": "0.1.0",
+  "description": "reverse proxy with basic auth",
+  "main": "index.js",
+  "dependencies": {
+    "basic-auth": "^2.0.0",
+    "http-proxy": "^1.16.2",
+    "solog": "^0.2.0",
+    "tcp-proxy": "^0.0.1"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "build": "docker build . -t somax/auth-proxy"
+  },
+  "author": "MaXiaojun@163.com",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/somax/auth-proxy.git"
+  },
+  "bugs": {
+    "url": "https://github.com/somax/auth-proxy/issues"
+  },
+  "homepage": "https://github.com/somax/auth-proxy#readme"
+}
