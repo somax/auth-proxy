@@ -1,10 +1,10 @@
 {
   "name": "auth-proxy",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "reverse proxy with basic auth",
   "main": "index.js",
   "dependencies": {
-    "@somax/speakeasy": "^2.0.0-1",
+    "speakeasy": "^2.0.0",
     "basic-auth": "^2.0.0",
     "http-proxy": "^1.16.2",
     "jsonfile": "^4.0.0",
