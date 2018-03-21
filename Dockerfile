@@ -8,5 +8,6 @@ COPY package-lock.json .
 RUN npm install --registry https://registry.npm.taobao.org/
 
 COPY index.js .
+COPY lib/* lib/
 
 CMD ["node", "."]
