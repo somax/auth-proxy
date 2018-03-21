@@ -24,8 +24,41 @@ $ docker run -d \
 
 ```
 
-## api
+## 环境变量
 
-### _auth_proxy_otp
+- `PROXY_TARGET_HOST` 代理目标服务 IP 地址或域名
+- `PROXY_TARGET_PORT` 代理目标服务 端口号
+- `PROXY_NAME` 管理员用户名
+- `PROXY_PASS` 管理员密码
+- `PROXY_PORT` 代理服务器端口号，默认 `3000`
+- `PROXY_ENABLE_2FA` 是否开启两步验证 `true`/`false`，默认不开启
+- `PROXY_SECRET_FILE` 两步验证密文证书文件，支持在 rancher 中使用 secret (密文)方式提供，默认当前目录下 `.secret` 文件
 
-### _auth_proxy_logout
+## 流程说明
+
+### 基本认证
+
+```
+访问代理服务地址 -> 输入用户名及密码 -> (正确）-> 请求【目标网站】-> 返回内容
+                        v
+                      (错误) -> 重新输入/取消
+
+```
+
+### 开启 2FA （Two Factor Auth）
+```
+# 设置 2FA 账户
+访问 `/_auth_proxy_otp` -> 输入用户名及密码 -> (正确) -> 显示二维码 -> 手机 2FA 客户端 扫描添加账户
+                                  v
+                                (错误) -> 重新输入/取消
+
+# 用 2FA 密码登录
+访问代理服务地址 -> 输入用户名及 2FA 密码 -> (正确）-> 请求【目标网站】-> 返回内容
+                              v
+                            (错误) -> 重新输入/取消
+```
+
+### 强制登出
+```
+访问 `/_auth_proxy_logout` -> 提示输入用户名及密码 -> 选取消即可（清除密码缓存）
+```
