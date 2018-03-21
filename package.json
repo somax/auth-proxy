@@ -1,6 +1,6 @@
 {
   "name": "auth-proxy",
-  "version": "0.2.0",
+  "version": "0.2.1-dev",
   "description": "reverse proxy with basic auth",
   "main": "index.js",
   "dependencies": {
@@ -16,7 +16,7 @@
   },
   "devDependencies": {},
   "scripts": {
-    "build": "docker build . -t somax/auth-proxy"
+    "build": "docker build . -t somax/auth-proxy:$npm_package_version"
   },
   "author": "MaXiaojun@163.com",
   "license": "MIT",
