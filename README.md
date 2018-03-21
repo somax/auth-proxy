@@ -33,6 +33,7 @@ $ docker run -d \
 - `PROXY_PORT` 代理服务器端口号，默认 `3000`
 - `PROXY_ENABLE_2FA` 是否开启两步验证 `true`/`false`，默认不开启
 - `PROXY_SECRET_FILE` 两步验证密文证书文件，支持在 rancher 中使用 secret (密文)方式提供，默认当前目录下 `.secret` 文件
+- `PROXY_DEBUG` 打印 debug 信息，`true`/`false`，默认 `false`
 
 ## 流程说明
 
@@ -62,9 +63,11 @@ $ docker run -d \
 ```
 访问 `/_auth_proxy_logout` -> 提示输入用户名及密码 -> 选取消即可（清除密码缓存）
 ```
+> 注意：两步验证证书在首次运行会自动生成，如需更换，手动删除证书（默认是`.secret`) 文件后重启服务
 
 ### 不适用场景
 
 1. 目前不支持 https 代理 
 2. 页面内有其他引用，包括不同端口，这些部分不会被代理
 3. 代理目标服务本身就有 Basic auth 认证的，会冲突
+4. 页面内的连接包含域名的情况，在点击这些链接时会转到原连接
