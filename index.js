@@ -10,7 +10,8 @@ const cookie = require('cookie');
 const speakeasy = require('speakeasy');
 
 const KeyStore = require('./lib/key-store');
-let ks = new KeyStore({ sweepTime: 3000, lifeTime: 30000 });//TODO 时间设定待开发完成后调整
+// let ks = new KeyStore({ sweepTime: 3000, lifeTime: 30000 });//TODO 时间设定待开发完成后调整
+let ks = new KeyStore();
 
 // 通过环境变量 PROXY_DEBUG 确定是否输出 DEBUG 信息
 log.setDevelopMode(process.env.PROXY_DEBUG === 'true');
@@ -31,6 +32,7 @@ const SECRET_FILE = process.env.PROXY_SECRET_FILE || '.secret';
 // 允许密码有效期为前后 n 秒，n = i * 30
 const _2FA_WINDOW = 1; //TODO 调试方便先设大点，回头改回 1
 const AUTH_TOKEN_COOKIE_NAME = '_APTK';
+const COOKIE_MAX_AGE = 60 * 60 * 24 * 7;  // 1 week
 
 // two factor auth
 let secret;
@@ -81,7 +83,8 @@ function startServer() {
     function setCookie(res, name, value) {
         res.setHeader('Set-Cookie', cookie.serialize(name, value, {
             httpOnly: true,
-            maxAge: 60 * 60 * 24 * 7 // 1 week 
+            path:'/',
+            maxAge: COOKIE_MAX_AGE 
         }));
     }
 
@@ -91,6 +94,11 @@ function startServer() {
     }
 
     const proxyServer = http.createServer(function (req, res) {
+
+        // 目标如果是代理服务器需要 host 信息
+        req.headers.host = `${TARGET_HOST}:${TARGET_PORT}`;
+        log.debug(Object.keys(req), req.headers)
+
         var _credentials = auth(req);
 
         // 强制清理 base auth 缓存
@@ -163,14 +171,6 @@ function startServer() {
 
                     // ...再验证 2FA 密码
                     let userToken = _credentials.pass;
-
-                    // TODO remove when debug done >>
-                    // let token = speakeasy.totp({
-                    //     secret: secret.base32,
-                    //     encoding: 'base32'
-                    // });
-                    // log.debug(token, userToken);
-                    // <<
 
                     let verified = speakeasy.totp.verify({
                         secret: secret.base32,
