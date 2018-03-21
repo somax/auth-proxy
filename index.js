@@ -38,23 +38,25 @@ const COOKIE_MAX_AGE = 60 * 60 * 24 * 7;  // 1 week
 let secret;
 
 // 从文件读取密文
-jf.readFile(SECRET_FILE, function(err, _secret) {
-    if (!err) {
-        secret = _secret;
-    } else {
-        // 如果不存在就生成新的密文
-        secret = speakeasy.generateSecret({ name: NAME, length: SECRET_LENGTH });
+if (ENABLE_2FA) {
+    jf.readFile(SECRET_FILE, function (err, _secret) {
+        if (!err) {
+            secret = _secret;
+        } else {
+            // 如果不存在就生成新的密文
+            secret = speakeasy.generateSecret({ name: NAME, length: SECRET_LENGTH });
 
-        // 并保存到文件
-        jf.writeFile(SECRET_FILE, secret, function(err) {
-            if (err) log.error(err)
-        })
+            // 并保存到文件
+            jf.writeFile(SECRET_FILE, secret, function (err) {
+                if (err) log.error(err)
+            })
 
-    }
+        }
 
-    startServer();
+        startServer();
 
-})
+    })
+}
 
 
 function startServer() {
@@ -66,7 +68,7 @@ function startServer() {
         }
     });
 
-    proxy.on('error', function(err) {
+    proxy.on('error', function (err) {
         log.err(err)
     });
 
@@ -83,8 +85,8 @@ function startServer() {
     function setCookie(res, name, value) {
         res.setHeader('Set-Cookie', cookie.serialize(name, value, {
             httpOnly: true,
-            path:'/',
-            maxAge: COOKIE_MAX_AGE 
+            path: '/',
+            maxAge: COOKIE_MAX_AGE
         }));
     }
 
@@ -97,7 +99,7 @@ function startServer() {
 
         // 目标如果是代理服务器需要 host 信息
         req.headers.host = `${TARGET_HOST}:${TARGET_PORT}`;
-        log.debug(Object.keys(req), req.headers)
+        // log.debug(Object.keys(req), req.headers)
 
         var _credentials = auth(req);
 
@@ -135,7 +137,7 @@ function startServer() {
                 // - [√] 如果存在直接放行，如果不存在则验证密码，
                 // - [√] 验证密码通过，生成 token 存入 key-store 然后加入 cookies
                 // - [√] 检测有效 token 的剩余生命期，如果生命减半，则更新 token
-                // - [ ] 并发请求会生成多个 token 的问题
+                // - [√] 并发请求会生成多个 token 的问题
 
                 // 先看看 cookie 中的 token 是否有效
                 let cookies = cookie.parse(req.headers.cookie || '');
@@ -184,7 +186,15 @@ function startServer() {
                     if (verified) {
                         // 密码验证通过，就给 token
                         setToken(res);
-                        proxy.web(req, res);
+
+                        // 因为第一次会并发很多请求过来，如果直接放行，并发过来的其余请求因为没有 token 
+                        // 所以还会再次申请造成重复 token，所以采用给了 token 后直接跳转回'/'，让浏览器
+                        // 再次发送所有请求，此时所有请求都会包含正确 token
+                        res.writeHead(301,
+                            { Location: '/'}
+                        );
+                        res.end('Refresh your browser');
+
                     } else {
                         deny(res);
                     }
@@ -194,7 +204,7 @@ function startServer() {
 
             // 不用两步验证的模式，就是简单的 basic auth 了
             else {
-                if (basicAuthCheck(_redentials)) {
+                if (basicAuthCheck(_credentials)) {
                     deny(res);
                 } else {
                     proxy.web(req, res);
