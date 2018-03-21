@@ -10,13 +10,9 @@ const cookie = require('cookie');
 const speakeasy = require('speakeasy');
 
 const KeyStore = require('./lib/key-store');
-let ks = new KeyStore({sweepTime:3000, expTime:600000});
+let ks = new KeyStore({ sweepTime: 3000, lifeTime: 30000 });//TODO 时间设定待开发完成后调整
 
-// test
-ks.insert('aaaaaaa',2000);
-ks.insert('bbbbbbb',2000);
-ks.insert('ccccccc',5000);
-
+// 通过环境变量 PROXY_DEBUG 确定是否输出 DEBUG 信息
 log.setDevelopMode(process.env.PROXY_DEBUG === 'true');
 
 const TARGET_HOST = process.env.PROXY_TARGET_HOST;
@@ -33,8 +29,8 @@ const SECRET_LENGTH = process.env.PROXY_SECRET_LENGTH || 20
 const SECRET_FILE = process.env.PROXY_SECRET_FILE || '.secret';
 
 // 允许密码有效期为前后 n 秒，n = i * 30
-const _2FA_WINDOW = 10; //TODO 调试方便先设大点，回头改回 1
-const AUTH_TOKEN_COOKIE_NAME = '_APTK' ;
+const _2FA_WINDOW = 1; //TODO 调试方便先设大点，回头改回 1
+const AUTH_TOKEN_COOKIE_NAME = '_APTK';
 
 // two factor auth
 let secret;
@@ -75,7 +71,7 @@ function startServer() {
     function deny(res, msg) {
         res.statusCode = 401;
         res.setHeader('WWW-Authenticate', 'Basic realm="auth-proxy"');
-        res.end('Access denied');
+        res.end(msg || 'Access denied');
     }
 
     function basicAuthCheck(credentials) {
@@ -89,22 +85,28 @@ function startServer() {
         }));
     }
 
-    const proxyServer = http.createServer(function(req, res) {
+    function setToken(res) {
+        let token = ks.insert(uuid());
+        setCookie(res, AUTH_TOKEN_COOKIE_NAME, token)
+    }
+
+    const proxyServer = http.createServer(function (req, res) {
         var _credentials = auth(req);
 
         // 强制清理 base auth 缓存
         if (req.url === '/_auth_proxy_logout') {
             // TODO 删除 cookie 中的 token
-            deny(res,'Logout')
+            setCookie(res, AUTH_TOKEN_COOKIE_NAME, '')
+            deny(res, 'Logout success')
         }
-        
+
         // 获得二维码，用来设置手机端 2FA 账户
         else if (req.url === '/_auth_proxy_otp') {
             if (ENABLE_2FA) {
-                if (basicAuthCheck(_redentials)) {
+                if (basicAuthCheck(_credentials)) {
                     deny(res)
                 } else {
-                    QRCode.toDataURL(secret.otpauth_url, function(err, data_url) {
+                    QRCode.toDataURL(secret.otpauth_url, function (err, data_url) {
                         res.writeHead(200, { 'Content-Type': 'text/html' });
                         res.end('<img src="' + data_url + '">');
                     });
@@ -113,73 +115,85 @@ function startServer() {
                 res.end('ENABLE_2FA=false');
             }
         }
-        
+
         // 剩下的就是正常代理网站内容了
         else {
 
+            // 在两步验证开启的模式下
             if (ENABLE_2FA) {
 
                 // TODO 
                 // - [√] 检查 cookies 中的 token 是否存在于 key - store 中，
                 // - [√] 如果存在直接放行，如果不存在则验证密码，
                 // - [√] 验证密码通过，生成 token 存入 key-store 然后加入 cookies
-                // - [ ] 检测有效 token 的剩余生命期，如果生命减半，则更新 token
-                // if(ks.check())
+                // - [√] 检测有效 token 的剩余生命期，如果生命减半，则更新 token
+                // - [ ] 并发请求会生成多个 token 的问题
+
+                // 先看看 cookie 中的 token 是否有效
                 let cookies = cookie.parse(req.headers.cookie || '');
-                log.debug('------------cookies----', cookies)
-                let tokenVerified = ks.check(cookies[AUTH_TOKEN_COOKIE_NAME]);
-                log.debug('tokenVerified:',tokenVerified)
+                let token = cookies[AUTH_TOKEN_COOKIE_NAME];
+
+                let tokenVerified = ks.check(token);
+                log.debug('tokenVerified:', tokenVerified)
 
                 if (tokenVerified) {
+                    // 验证通过，给...
                     proxy.web(req, res);
+
+                    // 检查有效的 token 是否需要续命，如果剩余时间小于生命期一半就给个新 token
+                    let expireTime = KeyStore.getExpireTime(token);
+                    if (expireTime - Date.now() < ks.lifeTime / 2) {
+                        log.debug('续命!')
+                        setToken(res);
+                    }
+
+                    // token 验证通过就可以了，结束吧
                     return;
                 }
 
 
-                // 开启两步验证的方式，先检查用户名
-                if (_credentials && _credentials.name === NAME) {
+                // token 未通过，就开始走颁发 token 流程
+                // 先检查用户名...
+                if (!_credentials || _credentials.name !== NAME) {
+                    log('no credentials or name not match');
+                    deny(res);
+                } else {
                     log.debug('_credentials', _credentials);
                     log.debug('secret', secret);
 
-                    // 再验证 2FA 密码
-
+                    // ...再验证 2FA 密码
                     let userToken = _credentials.pass;
 
                     // TODO remove when debug done >>
-                    let token = speakeasy.totp({
-                        secret: secret.base32,
-                        encoding: 'base32'
-                    });
-                    log.debug(token, userToken);
+                    // let token = speakeasy.totp({
+                    //     secret: secret.base32,
+                    //     encoding: 'base32'
+                    // });
+                    // log.debug(token, userToken);
                     // <<
 
                     let verified = speakeasy.totp.verify({
                         secret: secret.base32,
                         encoding: 'base32',
-                        token: userToken,
+                        token: _credentials.pass,
                         window: _2FA_WINDOW
                     });
 
                     log.debug('verified', verified);
 
                     if (verified) {
-
-                        // TODO 生成 token 存入 cookie
-                        let token = ks.insert(uuid());
-                        setCookie(res, AUTH_TOKEN_COOKIE_NAME, token)
-
+                        // 密码验证通过，就给 token
+                        setToken(res);
                         proxy.web(req, res);
                     } else {
                         deny(res);
                     }
 
-                } else {
-                    log('no credentials or name not match');
-                    deny(res);
                 }
-            } else {
+            }
 
-                // 不用两步验证的模式，就是简单的 basic auth 了
+            // 不用两步验证的模式，就是简单的 basic auth 了
+            else {
                 if (basicAuthCheck(_redentials)) {
                     deny(res);
                 } else {
@@ -190,7 +204,7 @@ function startServer() {
     });
 
     // 同时代理 Websocket
-    proxyServer.on('upgrade', function(req, socket, head) {
+    proxyServer.on('upgrade', function (req, socket, head) {
         proxy.ws(req, socket, head);
     });
 
@@ -198,7 +212,7 @@ function startServer() {
 
     log.info(`Start at http://0.0.0.0:${PORT}, proxy to ${TARGET_HOST}:${TARGET_PORT}`)
 
-    if(ENABLE_2FA){
+    if (ENABLE_2FA) {
         log.info(`To scan qrcode image at: http://0.0.0.0:${PORT}/_auth_proxy_otp`)
     }
 
@@ -207,6 +221,6 @@ function startServer() {
 
 
 // 使得在容器中运行支持 ctrl+c 退出
-process.on('SIGINT', function() {
+process.on('SIGINT', function () {
     process.exit();
 });
