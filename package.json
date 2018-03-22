@@ -1,6 +1,6 @@
 {
   "name": "auth-proxy",
-  "version": "0.2.1-dev",
+  "version": "0.2.2-dev",
   "description": "reverse proxy with basic auth",
   "main": "index.js",
   "dependencies": {
