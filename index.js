@@ -52,10 +52,10 @@ if (ENABLE_2FA) {
             })
 
         }
-
         startServer();
-
     })
+} else {
+    startServer();
 }
 
 
